@@ -1,0 +1,92 @@
+from playwright.async_api import async_playwright
+import requests
+import asyncio
+import json
+
+# ✅ Ollama LLaMA API Endpoint
+url = "http://localhost:11434/api/generate"
+
+# ✅ LLaMA ke through prompt send karna
+async def ask_llama(prompt):
+    data = {
+        "model": "llama3.2",
+        "prompt": prompt,
+        "max_tokens": 200
+    }
+    response = requests.post(url, json=data, stream=True)
+    full_response = ""
+    for line in response.iter_lines():
+        json_line = json.loads(line.decode('utf-8'))
+        full_response += json_line['response'] + " "
+        if json_line.get("done", False):
+            break
+    return full_response.strip()
+
+# ✅ AI Agent Code (Autonomous Web Automation)
+async def autonomous_agent():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=False)
+        page = await browser.new_page()
+        
+        # ✅ Step 1: Visit Skyscanner Website
+        await page.goto("https://www.skyscanner.com/")
+        print("✅ Website Loaded Successfully")
+
+        # ✅ Step 2: Extract Page Content for Inspection
+        page_content = await page.content()
+        
+        # ✅ Step 3: Use LLaMA to Analyze and Generate Selectors
+        prompt = f"""
+        You are an AI web agent analyzing a webpage for automation. 
+        Identify selectors for the following elements:
+        1. From Input Box
+        2. To Input Box
+        3. Date Picker
+        4. Search Button
+        Analyze the following HTML:
+        {page_content[:3000]}
+        """
+        
+        # ✅ Send Prompt to LLaMA for Selector Identification
+        print("🔎 Asking LLaMA for selectors...")
+        llm_response = await ask_llama(prompt)
+        print("✅ LLaMA Response:", llm_response)
+
+        # ✅ Step 4: Parse LLaMA Response for Selectors
+        try:
+            selectors = json.loads(llm_response)
+        except json.JSONDecodeError:
+            print("❌ Failed to Parse LLaMA Response. Try with simpler selectors.")
+            return
+        
+        # ✅ Step 5: Fill Form Using LLaMA's Selectors (Mumbai to Bangalore)
+        await page.fill(selectors['from'], "Mumbai (BOM)")
+        await page.fill(selectors['to'], "Bangalore (BLR)")
+
+        # ✅ Date Selection
+        await page.click(selectors['date'])
+        await page.click('button[aria-label="12 January 2025"]')
+
+        # ✅ Search Button Click
+        await page.click(selectors['search_button'])
+
+        # ✅ Step 6: Wait and Extract Flight Results
+        await page.wait_for_selector('div[data-testid="result-card"]', timeout=60000)
+        flight_results = await page.evaluate('''
+            () => {
+                const results = [];
+                document.querySelectorAll('div[data-testid="result-card"]').forEach(item => {
+                    results.push(item.innerText);
+                });
+                return results;
+            }
+        ''')
+        
+        # ✅ Step 7: Close Browser and Print Results
+        await browser.close()
+        print("\n✅ Flights Found (Mumbai to Bangalore):")
+        for flight in flight_results[:5]:
+            print(flight)
+
+# ✅ Run the Agent
+await autonomous_agent()
